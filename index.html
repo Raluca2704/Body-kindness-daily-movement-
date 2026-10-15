@@ -256,6 +256,10 @@
       from { opacity: 0; transform: translateY(-6px); }
       to { opacity: 1; transform: translateY(0); }
     }
+    .reminders { max-width:388px; margin:12px auto; padding:18px 20px; background:#ffffffb3; border-radius:18px; color:#7a6858; font-size:13px; line-height:1.6; }
+    .reminder-btn { border:1px solid #c47a8a; background:#fff8fa; color:#794454; padding:9px 12px; border-radius:16px; cursor:pointer; font:12px sans-serif; }
+    .reminder-state { font:12px sans-serif; color:#794454; margin-top:6px; }
+    button:focus-visible, a:focus-visible { outline:3px solid #7a8bbf; outline-offset:3px; }
   </style>
 </head>
 <body>
@@ -276,6 +280,14 @@
     </div>
   </div>
 
+  <section class="reminders" aria-label="Movement reminders">
+    <strong>A gentle reminder for every movement</strong>
+    <p>Daily Calendar alerts at your six scheduled times. Import once, then keep Calendar notifications enabled. Times follow your local clock.</p>
+    <button class="reminder-btn" id="allReminders">Download all 6 daily reminders</button>
+    <p>On iPhone: import the .ics attachment from Mail. On Mac: open it with Calendar and choose your iCloud calendar to sync to iPhone. You can also download one reminder inside each movement card.</p>
+    <p>These are Calendar alerts. Checking a movement here does not cancel its Calendar alert. Edit or remove recurring alerts in Calendar; avoid importing twice.</p>
+    <p id="reminderStatus" role="status" aria-live="polite"></p>
+  </section>
   <div class="cards" id="cardsContainer"></div>
 
   <div class="celebration" id="celebration">
@@ -319,11 +331,11 @@
       },
       {
         id: 4,
-        time: "8:00 PM", title: "Asian Pilates",
+        time: "8:00 PM", title: "Body Groove",
         subtitle: "One hour after dinner", duration: "30 min", icon: "🌸",
-        typeLabel: "Organic Fit App", color: "#f0dde4", accent: "#c47a8a",
-        description: "Mindful Pilates flow for an evening reset. Open your Organic Fit app.",
-        link: "https://apps.apple.com/app/id1188810254", linkLabel: "↗ Open App"
+        typeLabel: "Body Groove App", color: "#f0dde4", accent: "#c47a8a",
+        description: "An evening dance break: move freely, enjoy the music, and reconnect with your body. In the App Store, tap Open to launch your installed Body Groove app.",
+        link: "https://apps.apple.com/ro/app/body-groove/id1315730234", linkLabel: "↗ Open App"
       },
       {
         id: 5,
@@ -345,8 +357,9 @@
       "You are allowed to take up space, gently."
     ];
 
-    const today = new Date();
-    const todayKey = "bk-checks-" + today.toISOString().slice(0, 10);
+    let today = new Date();
+    function localDateKey(d) { return d.getFullYear() + "-" + String(d.getMonth()+1).padStart(2,"0") + "-" + String(d.getDate()).padStart(2,"0"); }
+    let todayKey = "bk-checks-" + localDateKey(today);
     let checked = {};
     let expandedId = null;
 
@@ -396,9 +409,9 @@
             <div class="card-text">
               <div class="card-time" style="color:${w.accent}">${w.time} · ${w.duration}</div>
               <div class="card-title">${w.title}</div>
-              <div class="card-sub">${w.subtitle}</div>
+              <div class="card-sub">${w.subtitle}</div><div class="reminder-state">${done ? "Completed today" : (minutesFor(w) <= new Date().getHours()*60 + new Date().getMinutes() ? "♡ Ready when you are" : "Reminder time · " + w.time)}</div>
             </div>
-            <button class="check-btn"
+            <button aria-label="${done ? "Mark incomplete" : "Mark complete"}: ${w.title}" aria-pressed="${done}" class="check-btn"
               style="border-color:${done ? w.accent : w.accent + "60"};
                      background:${done ? w.accent : "transparent"};
                      color:${done ? "#fff" : w.accent}"
@@ -408,18 +421,21 @@
           <div class="card-detail${expanded ? " open" : ""}" style="border-top:1px solid ${w.accent}25">
             <p class="card-desc">${w.description}</p>
             <div class="card-actions">
+              <button class="reminder-btn" data-reminder="${w.id}">♡ Daily Calendar reminder</button>
               <span class="badge" style="color:${w.accent};background:${w.color}cc">${w.typeLabel}</span>
-              ${w.link ? `<a class="btn-link" href="${w.link}" target="_blank" style="background:${w.accent}">${w.linkLabel}</a>` : ""}
+              ${w.link ? `<a class="btn-link" href="${w.link}" target="_blank" rel="noopener noreferrer" style="background:${w.accent}">${w.id === 4 ? "↗ Body Groove · App Store" : w.linkLabel}</a>` : ""}
             </div>
           </div>
         `;
 
         // Toggle expand on card click
         card.addEventListener("click", (e) => {
-          if (e.target.closest(".check-btn") || e.target.closest("a")) return;
+          if (e.target.closest("button") || e.target.closest("a")) return;
           expandedId = (expandedId === w.id) ? null : w.id;
           renderCards();
         });
+
+        card.querySelector("[data-reminder]").addEventListener("click", () => downloadReminders([w]));
 
         // Check button
         card.querySelector(".check-btn").addEventListener("click", (e) => {
@@ -434,8 +450,58 @@
       });
     }
 
+
+    function minutesFor(w) {
+      const [,h,m,period] = w.time.match(/(\d+):(\d+) (AM|PM)/);
+      return (Number(h)%12 + (period === "PM" ? 12 : 0))*60 + Number(m);
+    }
+    function calendarEscape(value) {
+      return value.replace(/\\/g,"\\\\").replace(/\n/g,"\\n").replace(/,/g,"\\,").replace(/;/g,"\\;");
+    }
+    function calendarStamp(date) {
+      return localDateKey(date).replace(/-/g,"") + "T" + [date.getHours(),date.getMinutes(),date.getSeconds()].map(n=>String(n).padStart(2,"0")).join("");
+    }
+    function buildCalendar(items, now = new Date()) {
+      const lines = ["BEGIN:VCALENDAR","VERSION:2.0","PRODID:-//Body Kindness//Daily Movement//EN","CALSCALE:GREGORIAN","X-WR-CALNAME:Daily Movement"];
+      items.forEach(w => {
+        const start = new Date(now); start.setHours(0,minutesFor(w),0,0);
+        if (start <= now) start.setDate(start.getDate()+1);
+        const end = new Date(start.getTime() + parseInt(w.duration,10)*60000);
+        lines.push("BEGIN:VEVENT","UID:bk-daily-movement-"+w.id+"@bodykindness",
+          "DTSTAMP:"+now.toISOString().replace(/[-:]/g,"").replace(/\.\d{3}Z$/,"Z"),
+          "DTSTART:"+calendarStamp(start),"DTEND:"+calendarStamp(end),"RRULE:FREQ=DAILY",
+          "SUMMARY:"+calendarEscape(w.title),"DESCRIPTION:"+calendarEscape("A gentle invitation to move. "+(w.link || "Open Daily Movement.")),
+          ...(w.link ? ["URL:"+w.link] : []),
+          "BEGIN:VALARM","TRIGGER:PT0S","ACTION:DISPLAY","DESCRIPTION:"+calendarEscape(w.title),
+          "END:VALARM","END:VEVENT");
+      });
+      lines.push("END:VCALENDAR");
+      return lines.join("\r\n")+"\r\n";
+    }
+    function downloadReminders(items) {
+      const url = URL.createObjectURL(new Blob([buildCalendar(items)],{type:"text/calendar;charset=utf-8"}));
+      const a = document.createElement("a"); a.href=url; a.download=items.length>1 ? "daily-movement-reminders.ics" : "daily-movement-"+items[0].id+".ics";
+      document.body.appendChild(a); a.click(); a.remove();
+      setTimeout(()=>URL.revokeObjectURL(url),60000);
+      document.getElementById("reminderStatus").textContent="Calendar file prepared. Import it into Calendar to activate alerts; downloading alone does not activate them.";
+    }
+    document.getElementById("allReminders").addEventListener("click",()=>downloadReminders(workouts));
+    function refreshDay() {
+      const now = new Date(), key = "bk-checks-"+localDateKey(now);
+      if (key !== todayKey) {
+        today=now; todayKey=key; checked={};
+        try { checked=JSON.parse(localStorage.getItem(todayKey)||"{}"); } catch(e) {}
+        document.getElementById("dateStr").textContent=now.toLocaleDateString("en-GB",{weekday:"long",day:"numeric",month:"long"});
+        document.getElementById("quoteBox").textContent="“"+quotes[now.getDay()%quotes.length]+"”";
+      }
+      renderCards(); updateProgress();
+    }
+    document.addEventListener("visibilitychange",()=>{ if(!document.hidden) refreshDay(); });
+    setInterval(refreshDay,60000);
+
     renderCards();
     updateProgress();
   </script>
 </body>
 </html>
+
