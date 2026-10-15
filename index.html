@@ -280,14 +280,15 @@
     </div>
   </div>
 
-  <section class="reminders" aria-label="Movement reminders">
+  <details class="reminders" aria-label="Movement reminders">
+    <summary style="cursor:pointer">♡ Calendar reminders</summary>
     <strong>A gentle reminder for every movement</strong>
     <p>Daily Calendar alerts at your six scheduled times. Import once, then keep Calendar notifications enabled. Times follow your local clock.</p>
     <button class="reminder-btn" id="allReminders">Download all 6 daily reminders</button>
     <p>On iPhone: import the .ics attachment from Mail. On Mac: open it with Calendar and choose your iCloud calendar to sync to iPhone. You can also download one reminder inside each movement card.</p>
     <p>These are Calendar alerts. Checking a movement here does not cancel its Calendar alert. Edit or remove recurring alerts in Calendar; avoid importing twice.</p>
     <p id="reminderStatus" role="status" aria-live="polite"></p>
-  </section>
+  </details>
   <div class="cards" id="cardsContainer"></div>
 
   <div class="celebration" id="celebration">
@@ -504,4 +505,5 @@
   </script>
 </body>
 </html>
+
 
